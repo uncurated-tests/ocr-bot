@@ -102,18 +102,33 @@ export async function downloadImage(
   return Buffer.from(arrayBuffer);
 }
 
-// Post message to thread
+// Post message to thread and return message ts for updating later
 export async function postMessageToThread(
   client: WebClient,
   channel: string,
   threadTs: string,
   text: string
-): Promise<void> {
-  await client.chat.postMessage({
+): Promise<string> {
+  const result = await client.chat.postMessage({
     channel,
     thread_ts: threadTs,
     text,
     mrkdwn: true,
+  });
+  return result.ts as string;
+}
+
+// Update an existing message
+export async function updateMessage(
+  client: WebClient,
+  channel: string,
+  messageTs: string,
+  text: string
+): Promise<void> {
+  await client.chat.update({
+    channel,
+    ts: messageTs,
+    text,
   });
 }
 
