@@ -1,6 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifySlackSignature, getSlackClient } from "../../lib/slack.js";
+import { verifySlackSignature } from "../../lib/slack.js";
 import { processThread } from "../../lib/process-thread.js";
+
+// Disable body parsing to get raw body for signature verification
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
 interface SlackSlashCommand {
   token: string;
@@ -35,24 +42,13 @@ export default async function handler(
     return;
   }
 
-  // Get raw body for signature verification
-  // Slack sends URL-encoded form data
-  let rawBody: string;
-  let payload: SlackSlashCommand;
-
-  if (typeof req.body === "string") {
-    rawBody = req.body;
-    payload = parseUrlEncoded(rawBody) as unknown as SlackSlashCommand;
-  } else if (typeof req.body === "object") {
-    // Vercel might have already parsed it
-    payload = req.body as SlackSlashCommand;
-    rawBody = new URLSearchParams(
-      payload as unknown as Record<string, string>
-    ).toString();
-  } else {
-    res.status(400).json({ error: "Invalid request body" });
-    return;
+  // Read raw body for signature verification
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
   }
+  const rawBody = Buffer.concat(chunks).toString("utf8");
+  const payload = parseUrlEncoded(rawBody) as unknown as SlackSlashCommand;
 
   const timestamp = req.headers["x-slack-request-timestamp"] as string;
   const signature = req.headers["x-slack-signature"] as string;
