@@ -219,12 +219,12 @@ describe("OCR E2E Tests", () => {
   });
 
   describe("Slack message formatting", () => {
-    it("should format English results correctly", () => {
+    it("should format single English result without filename header", () => {
       const results = [
         {
           fileName: "test.png",
           fileId: "file_001",
-          text: "Hello World",
+          text: "*Hello World*\nSome content here",
           language: "English",
           noTextFound: false,
           contentType: "other" as const,
@@ -233,8 +233,10 @@ describe("OCR E2E Tests", () => {
 
       const formatted = formatOCRResultsForSlack(results);
 
-      expect(formatted).toContain("*test.png*");
-      expect(formatted).toContain("Hello World");
+      // Single image should not show filename
+      expect(formatted).not.toContain("*test.png*");
+      expect(formatted).toContain("*Hello World*");
+      expect(formatted).toContain("Some content here");
       expect(formatted).not.toContain("English Translation");
     });
 
@@ -250,10 +252,19 @@ describe("OCR E2E Tests", () => {
           noTextFound: false,
           contentType: "document" as const,
         },
+        {
+          fileName: "other.png",
+          fileId: "file_003",
+          text: "Other text",
+          language: "English",
+          noTextFound: false,
+          contentType: "other" as const,
+        },
       ];
 
       const formatted = formatOCRResultsForSlack(results);
 
+      // Multiple images should show filenames
       expect(formatted).toContain("*spanish.png*");
       expect(formatted).toContain("*English Translation:*");
       expect(formatted).toContain("Hello World");
@@ -278,7 +289,7 @@ describe("OCR E2E Tests", () => {
       expect(formatted).toContain("No text found in image");
     });
 
-    it("should format multiple results with separator", () => {
+    it("should format multiple results with separator and headers", () => {
       const results = [
         {
           fileName: "test1.png",
@@ -300,8 +311,9 @@ describe("OCR E2E Tests", () => {
 
       const formatted = formatOCRResultsForSlack(results);
 
-      expect(formatted).toContain("test1.png");
-      expect(formatted).toContain("test2.png");
+      // Multiple images should show filenames
+      expect(formatted).toContain("*test1.png*");
+      expect(formatted).toContain("*test2.png*");
       expect(formatted).toContain("---");
     });
 
@@ -310,12 +322,12 @@ describe("OCR E2E Tests", () => {
       expect(formatted).toContain("No images found");
     });
 
-    it("should format website screenshots in code blocks", () => {
+    it("should pass through Slack-formatted text directly", () => {
       const results = [
         {
           fileName: "screenshot.png",
           fileId: "file_004",
-          text: "Dashboard\n\nNavigation\nHome | Settings | Profile\n\nMain Content\nWelcome to the app",
+          text: "*Dashboard*\n\n*Status:* Active\n\n*Items*\n• Item 1\n• Item 2\n\n```\nlog entry here\n```",
           language: "English",
           noTextFound: false,
           contentType: "website" as const,
@@ -324,10 +336,13 @@ describe("OCR E2E Tests", () => {
 
       const formatted = formatOCRResultsForSlack(results);
 
-      expect(formatted).toContain("*screenshot.png*");
+      // Single image, no filename header
+      expect(formatted).not.toContain("*screenshot.png*");
+      // Slack formatting should be preserved
+      expect(formatted).toContain("*Dashboard*");
+      expect(formatted).toContain("*Status:* Active");
+      expect(formatted).toContain("• Item 1");
       expect(formatted).toContain("```");
-      expect(formatted).toContain("Dashboard");
-      expect(formatted).toContain("Navigation");
     });
   });
 });

@@ -11,36 +11,59 @@ export interface OCRResult {
   contentType: "website" | "document" | "photo" | "other";
 }
 
-const OCR_PROMPT = `Extract and transcribe all text from this image.
+const OCR_PROMPT = `Extract text from this image and format it for Slack messaging.
 
-First, identify the content type:
-- "website": Screenshot of a website, app, dashboard, dialog, or software UI
-- "document": Scanned document, PDF, receipt, or printed text  
+Identify the content type:
+- "website": Screenshot of website, app, dashboard, or software UI
+- "document": Scanned document, PDF, receipt, or printed text
 - "photo": Photo of real-world text (signs, labels, handwriting)
 - "other": Any other image with text
 
-For WEBSITE/UI screenshots, format the output clearly:
-- Use the page/section title as a header
-- Group related elements logically (navigation, main content, sidebars, modals)
-- For tables/lists, preserve the structure using plain text formatting
-- Include button labels, form field labels and values, status indicators
-- Use indentation or bullet points to show hierarchy
-- Separate distinct sections with blank lines
+FORMAT THE OUTPUT USING SLACK MRKDWN SYNTAX:
+- Use *bold* for section headers, titles, and important labels
+- Use • for bullet point lists
+- Use regular text for values and descriptions
+- Only use \`\`\` code blocks \`\`\` for actual code, logs, or terminal output
+- Separate sections with blank lines
 
-For DOCUMENTS, preserve structure with headers, paragraphs, and lists.
+FOR UI/WEBSITE SCREENSHOTS, structure like this example:
+*Page Title*
 
-Output the extracted text in a clean, readable format - NOT as a literal dump of every UI element, but as meaningful structured content a human would want to read.
+*Status:* Build Failed
+*Error:* Command exited with 1
+
+*Deployment Info*
+• Created by username 10h ago
+• Duration: 1m 34s
+• Environment: Preview
+
+*Domains*
+• example.vercel.app
+• example-git-branch.vercel.app
+
+*Build Logs* (4 errors)
+\`\`\`
+06:20:38 error message here
+06:20:39 another error
+\`\`\`
+
+GUIDELINES:
+- Skip navigation menus, breadcrumbs, and repetitive UI chrome
+- Focus on the main content and actionable information
+- Group related items logically
+- Keep status indicators, error messages, and key metadata
+- For logs, include only the most relevant entries (errors, warnings)
 
 Respond in this exact JSON format:
 {
   "contentType": "website" | "document" | "photo" | "other",
   "language": "detected language name",
   "isEnglish": true or false,
-  "extractedText": "the formatted extracted text as a single string with newlines for structure",
+  "extractedText": "the Slack-formatted text with mrkdwn syntax",
   "englishTranslation": "English translation if not originally English, otherwise null"
 }
 
-If NO text is found, respond with:
+If NO text is found:
 {
   "contentType": "other",
   "language": "none",
@@ -49,7 +72,7 @@ If NO text is found, respond with:
   "englishTranslation": null
 }
 
-IMPORTANT: Return ONLY valid JSON, no markdown code blocks.`;
+IMPORTANT: Return ONLY valid JSON, no markdown code blocks around the JSON.`;
 
 interface GeminiOCRResponse {
   contentType: "website" | "document" | "photo" | "other";
@@ -153,17 +176,19 @@ export function formatOCRResultsForSlack(results: OCRResult[]): string {
   }
 
   const formattedResults = results.map((result) => {
-    let output = `*${result.fileName}*\n`;
+    // For single image, don't show filename header to reduce noise
+    const showHeader = results.length > 1;
+    let output = showHeader ? `*${result.fileName}*\n\n` : "";
 
     if (result.noTextFound) {
       output += "_No text found in image._";
     } else if (result.englishTranslation && result.originalText) {
       // Non-English text with translation
-      output += `*English Translation:*\n\`\`\`\n${result.text}\n\`\`\``;
-      output += `\n\n*Original (${result.language}):*\n\`\`\`\n${result.originalText}\n\`\`\``;
+      output += `*English Translation:*\n${result.text}`;
+      output += `\n\n---\n\n*Original (${result.language}):*\n${result.originalText}`;
     } else {
-      // English text - use code block for better formatting of structured content
-      output += `\`\`\`\n${result.text}\n\`\`\``;
+      // Text is already Slack-formatted from the AI
+      output += result.text;
     }
 
     return output;
