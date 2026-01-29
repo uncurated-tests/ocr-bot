@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifySlackSignature } from "../../lib/slack.js";
 import { processThread } from "../../lib/process-thread.js";
+import { logger } from "../../lib/logger.js";
 
 // Slack Events API payload types
 interface SlackChallenge {
@@ -84,14 +85,35 @@ export default async function handler(
       // Respond immediately to avoid Slack retry
       res.status(200).json({ ok: true });
 
-      // Process in background
+      // Start logging session
+      logger.start(`app_mention:${event_id}`);
+      logger.info("Received app_mention event", {
+        event_id,
+        channel: event.channel,
+        ts: event.ts,
+        thread_ts: event.thread_ts,
+        text: event.text,
+      });
+
+      // Determine the thread to process
+      // If mentioned in a thread, use thread_ts
+      // If mentioned in a top-level message, use that message's ts
       const threadTs = event.thread_ts || event.ts;
       const channel = event.channel;
 
+      logger.info("Processing thread", { channel, threadTs });
+
       try {
         await processThread(channel, threadTs);
+        logger.info("Thread processing completed successfully");
       } catch (error) {
-        console.error("Failed to process thread:", error);
+        logger.error("Failed to process thread", {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      } finally {
+        // Flush logs to blob storage
+        await logger.flush();
       }
 
       return;
