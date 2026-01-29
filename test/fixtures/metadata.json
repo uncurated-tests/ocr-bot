@@ -1,0 +1,62 @@
+[
+  {
+    "name": "01_english_simple.png",
+    "lang": "English",
+    "expectedText": "Hello World! This is a test.",
+    "originalText": "Hello World!\nThis is a test."
+  },
+  {
+    "name": "02_english_notes.png",
+    "lang": "English",
+    "expectedText": "Meeting Notes",
+    "originalText": "Meeting Notes - January 2024\n\n1. Review Q4 results\n2. Plan Q1 initiatives\n3. Budget allocation"
+  },
+  {
+    "name": "03_spanish.png",
+    "lang": "Spanish",
+    "expectedText": "Hola Mundo",
+    "originalText": "¡Hola Mundo!\nBienvenidos a todos"
+  },
+  {
+    "name": "04_french.png",
+    "lang": "French",
+    "expectedText": "Bonjour",
+    "originalText": "Bonjour le monde!\nComment ça va?"
+  },
+  {
+    "name": "05_german.png",
+    "lang": "German",
+    "expectedText": "Guten Tag",
+    "originalText": "Guten Tag!\nWie geht es Ihnen?"
+  },
+  {
+    "name": "06_portuguese.png",
+    "lang": "Portuguese",
+    "expectedText": "Olá Mundo",
+    "originalText": "Olá Mundo!\nBem-vindos ao Brasil"
+  },
+  {
+    "name": "07_italian.png",
+    "lang": "Italian",
+    "expectedText": "Ciao Mondo",
+    "originalText": "Ciao Mondo!\nBenvenuti a tutti"
+  },
+  {
+    "name": "08_code_snippet.png",
+    "lang": "English",
+    "expectedText": "function",
+    "originalText": "function greet(name) {\n  return \"Hello, \" + name;\n}\ngreet(\"World\");"
+  },
+  {
+    "name": "09_numbers_special.png",
+    "lang": "English",
+    "expectedText": "Invoice",
+    "originalText": "Invoice #12345\nTotal: $1,234.56\nDate: 2024-01-15\nEmail: test@example.com"
+  },
+  {
+    "name": "10_dutch.png",
+    "lang": "Dutch",
+    "expectedText": "Hallo Wereld",
+    "originalText": "Hallo Wereld!\nWelkom bij ons"
+  }
+]

@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@slack/web-api": "^7.8.0",
@@ -16,7 +18,9 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@vercel/node": "^5.5.28",
-    "typescript": "^5.7.0"
+    "canvas": "^3.2.1",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20"
