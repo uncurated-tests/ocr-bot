@@ -227,12 +227,14 @@ describe("OCR E2E Tests", () => {
           text: "Hello World",
           language: "English",
           noTextFound: false,
+          isStructured: false,
+          contentType: "other" as const,
         },
       ];
 
       const formatted = formatOCRResultsForSlack(results);
 
-      expect(formatted).toContain("*OCR Result for test.png*");
+      expect(formatted).toContain("*test.png*");
       expect(formatted).toContain("Hello World");
       expect(formatted).not.toContain("English Translation");
     });
@@ -247,12 +249,14 @@ describe("OCR E2E Tests", () => {
           englishTranslation: "Hello World",
           originalText: "Hola Mundo",
           noTextFound: false,
+          isStructured: false,
+          contentType: "document" as const,
         },
       ];
 
       const formatted = formatOCRResultsForSlack(results);
 
-      expect(formatted).toContain("*OCR Result for spanish.png*");
+      expect(formatted).toContain("*spanish.png*");
       expect(formatted).toContain("*English Translation:*");
       expect(formatted).toContain("Hello World");
       expect(formatted).toContain("*Original (Spanish):*");
@@ -267,6 +271,8 @@ describe("OCR E2E Tests", () => {
           text: "",
           language: "none",
           noTextFound: true,
+          isStructured: false,
+          contentType: "other" as const,
         },
       ];
 
@@ -283,6 +289,8 @@ describe("OCR E2E Tests", () => {
           text: "Text 1",
           language: "English",
           noTextFound: false,
+          isStructured: false,
+          contentType: "other" as const,
         },
         {
           fileName: "test2.png",
@@ -290,6 +298,8 @@ describe("OCR E2E Tests", () => {
           text: "Text 2",
           language: "English",
           noTextFound: false,
+          isStructured: false,
+          contentType: "other" as const,
         },
       ];
 
@@ -297,12 +307,33 @@ describe("OCR E2E Tests", () => {
 
       expect(formatted).toContain("test1.png");
       expect(formatted).toContain("test2.png");
-      expect(formatted).toContain("---"); // Separator
+      expect(formatted).toContain("━"); // New separator
     });
 
     it("should handle empty results array", () => {
       const formatted = formatOCRResultsForSlack([]);
       expect(formatted).toContain("No images found");
+    });
+
+    it("should format website screenshots with UI indicator", () => {
+      const results = [
+        {
+          fileName: "screenshot.png",
+          fileId: "file_004",
+          text: "*Dashboard*\n\n*Navigation*\nHome | Settings | Profile\n\n*Main Content*\nWelcome to the app",
+          language: "English",
+          noTextFound: false,
+          isStructured: true,
+          contentType: "website" as const,
+        },
+      ];
+
+      const formatted = formatOCRResultsForSlack(results);
+
+      expect(formatted).toContain(":computer:");
+      expect(formatted).toContain("UI/Website screenshot");
+      expect(formatted).toContain("Dashboard");
+      expect(formatted).toContain("Navigation");
     });
   });
 });

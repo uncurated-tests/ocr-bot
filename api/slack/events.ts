@@ -1,11 +1,35 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { waitUntil } from "@vercel/functions";
 import { put } from "@vercel/blob";
 import { verifySlackSignature } from "../../lib/slack.js";
 import { processThread } from "../../lib/process-thread.js";
 import { logger } from "../../lib/logger.js";
 
+// Disable body parsing to get raw body for signature verification
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+// Read raw body from request stream
+async function getRawBody(req: VercelRequest): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 // Log every incoming request to blob for debugging
-async function logRequest(req: VercelRequest, extra?: Record<string, unknown>) {
+async function logRequest(rawBody: string, req: VercelRequest, extra?: Record<string, unknown>) {
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    parsedBody = rawBody;
+  }
+  
   const logData = {
     timestamp: new Date().toISOString(),
     method: req.method,
@@ -14,7 +38,7 @@ async function logRequest(req: VercelRequest, extra?: Record<string, unknown>) {
       "x-slack-request-timestamp": req.headers["x-slack-request-timestamp"],
       "x-slack-signature": String(req.headers["x-slack-signature"] || "").substring(0, 20) + "...",
     },
-    body: req.body,
+    body: parsedBody,
     extra,
   };
   
@@ -59,16 +83,17 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
-  // Log every request for debugging
-  await logRequest(req, { stage: "received" });
-
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
   }
 
-  // Get raw body for signature verification
-  const rawBody = JSON.stringify(req.body);
+  // Read raw body for signature verification
+  const rawBody = await getRawBody(req);
+  
+  // Log every request for debugging
+  await logRequest(rawBody, req, { stage: "received" });
+
   const timestamp = req.headers["x-slack-request-timestamp"] as string;
   const signature = req.headers["x-slack-signature"] as string;
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
@@ -82,11 +107,19 @@ export default async function handler(
   // Verify signature
   if (!verifySlackSignature(signingSecret, signature, timestamp, rawBody)) {
     console.error("Invalid Slack signature");
+    await logRequest(rawBody, req, { stage: "signature_failed", timestamp, signature: signature?.substring(0, 20) });
     res.status(401).json({ error: "Invalid signature" });
     return;
   }
 
-  const payload = req.body as SlackPayload;
+  // Parse the body after signature verification
+  let payload: SlackPayload;
+  try {
+    payload = JSON.parse(rawBody) as SlackPayload;
+  } catch {
+    res.status(400).json({ error: "Invalid JSON" });
+    return;
+  }
 
   // Handle URL verification challenge
   if (payload.type === "url_verification") {
@@ -113,40 +146,45 @@ export default async function handler(
 
     // Handle app_mention events
     if (event.type === "app_mention") {
-      // Respond immediately to avoid Slack retry
-      res.status(200).json({ ok: true });
-
-      // Start logging session
-      logger.start(`app_mention:${event_id}`);
-      logger.info("Received app_mention event", {
-        event_id,
-        channel: event.channel,
-        ts: event.ts,
-        thread_ts: event.thread_ts,
-        text: event.text,
-      });
-
       // Determine the thread to process
       // If mentioned in a thread, use thread_ts
       // If mentioned in a top-level message, use that message's ts
       const threadTs = event.thread_ts || event.ts;
       const channel = event.channel;
 
-      logger.info("Processing thread", { channel, threadTs });
+      // Use waitUntil to keep the function alive while processing
+      // This allows us to respond immediately to Slack while continuing to process
+      waitUntil(
+        (async () => {
+          // Start logging session
+          logger.start(`app_mention:${event_id}`);
+          logger.info("Received app_mention event", {
+            event_id,
+            channel,
+            ts: event.ts,
+            thread_ts: event.thread_ts,
+            text: event.text,
+          });
 
-      try {
-        await processThread(channel, threadTs);
-        logger.info("Thread processing completed successfully");
-      } catch (error) {
-        logger.error("Failed to process thread", {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-      } finally {
-        // Flush logs to blob storage
-        await logger.flush();
-      }
+          logger.info("Processing thread", { channel, threadTs });
 
+          try {
+            await processThread(channel, threadTs);
+            logger.info("Thread processing completed successfully");
+          } catch (error) {
+            logger.error("Failed to process thread", {
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
+          } finally {
+            // Flush logs to blob storage
+            await logger.flush();
+          }
+        })()
+      );
+
+      // Respond immediately to avoid Slack retry
+      res.status(200).json({ ok: true });
       return;
     }
 

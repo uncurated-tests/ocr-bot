@@ -13,10 +13,15 @@ export function getSlackClient(): WebClient {
 // Verify Slack request signature
 export function verifySlackSignature(
   signingSecret: string,
-  signature: string,
-  timestamp: string,
+  signature: string | undefined,
+  timestamp: string | undefined,
   body: string
 ): boolean {
+  // Check for missing required headers
+  if (!signature || !timestamp) {
+    return false;
+  }
+
   const fiveMinutesAgo = Math.floor(Date.now() / 1000) - 60 * 5;
   if (parseInt(timestamp, 10) < fiveMinutesAgo) {
     return false;
@@ -26,6 +31,11 @@ export function verifySlackSignature(
   const mySignature =
     "v0=" +
     crypto.createHmac("sha256", signingSecret).update(sigBasestring).digest("hex");
+
+  // Ensure both signatures have the same length for timing-safe comparison
+  if (mySignature.length !== signature.length) {
+    return false;
+  }
 
   return crypto.timingSafeEqual(
     Buffer.from(mySignature),
