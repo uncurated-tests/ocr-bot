@@ -1,5 +1,4 @@
-import { google } from "@ai-sdk/google";
-import { generateText } from "ai";
+import { generateText, gateway } from "ai";
 
 export interface OCRResult {
   fileName: string;
@@ -51,10 +50,10 @@ export async function performOCR(
   fileId: string,
   mimeType: string
 ): Promise<OCRResult> {
-  const model = google("gemini-2.5-flash-preview-05-20");
-
+  // Use Vercel AI Gateway with Gemini 2.5 Flash
+  // OIDC authentication is automatic on Vercel deployments
   const { text } = await generateText({
-    model,
+    model: gateway("google/gemini-2.5-flash"),
     messages: [
       {
         role: "user",
@@ -66,11 +65,6 @@ export async function performOCR(
           {
             type: "image",
             image: imageBuffer,
-            mimeType: mimeType as
-              | "image/jpeg"
-              | "image/png"
-              | "image/gif"
-              | "image/webp",
           },
         ],
       },
