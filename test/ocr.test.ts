@@ -227,7 +227,6 @@ describe("OCR E2E Tests", () => {
           text: "Hello World",
           language: "English",
           noTextFound: false,
-          isStructured: false,
           contentType: "other" as const,
         },
       ];
@@ -249,7 +248,6 @@ describe("OCR E2E Tests", () => {
           englishTranslation: "Hello World",
           originalText: "Hola Mundo",
           noTextFound: false,
-          isStructured: false,
           contentType: "document" as const,
         },
       ];
@@ -271,7 +269,6 @@ describe("OCR E2E Tests", () => {
           text: "",
           language: "none",
           noTextFound: true,
-          isStructured: false,
           contentType: "other" as const,
         },
       ];
@@ -289,7 +286,6 @@ describe("OCR E2E Tests", () => {
           text: "Text 1",
           language: "English",
           noTextFound: false,
-          isStructured: false,
           contentType: "other" as const,
         },
         {
@@ -298,7 +294,6 @@ describe("OCR E2E Tests", () => {
           text: "Text 2",
           language: "English",
           noTextFound: false,
-          isStructured: false,
           contentType: "other" as const,
         },
       ];
@@ -307,7 +302,7 @@ describe("OCR E2E Tests", () => {
 
       expect(formatted).toContain("test1.png");
       expect(formatted).toContain("test2.png");
-      expect(formatted).toContain("━"); // New separator
+      expect(formatted).toContain("---");
     });
 
     it("should handle empty results array", () => {
@@ -315,23 +310,22 @@ describe("OCR E2E Tests", () => {
       expect(formatted).toContain("No images found");
     });
 
-    it("should format website screenshots with UI indicator", () => {
+    it("should format website screenshots in code blocks", () => {
       const results = [
         {
           fileName: "screenshot.png",
           fileId: "file_004",
-          text: "*Dashboard*\n\n*Navigation*\nHome | Settings | Profile\n\n*Main Content*\nWelcome to the app",
+          text: "Dashboard\n\nNavigation\nHome | Settings | Profile\n\nMain Content\nWelcome to the app",
           language: "English",
           noTextFound: false,
-          isStructured: true,
           contentType: "website" as const,
         },
       ];
 
       const formatted = formatOCRResultsForSlack(results);
 
-      expect(formatted).toContain(":computer:");
-      expect(formatted).toContain("UI/Website screenshot");
+      expect(formatted).toContain("*screenshot.png*");
+      expect(formatted).toContain("```");
       expect(formatted).toContain("Dashboard");
       expect(formatted).toContain("Navigation");
     });
