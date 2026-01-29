@@ -1,7 +1,35 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { put } from "@vercel/blob";
 import { verifySlackSignature } from "../../lib/slack.js";
 import { processThread } from "../../lib/process-thread.js";
 import { logger } from "../../lib/logger.js";
+
+// Log every incoming request to blob for debugging
+async function logRequest(req: VercelRequest, extra?: Record<string, unknown>) {
+  const logData = {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    headers: {
+      "content-type": req.headers["content-type"],
+      "x-slack-request-timestamp": req.headers["x-slack-request-timestamp"],
+      "x-slack-signature": String(req.headers["x-slack-signature"] || "").substring(0, 20) + "...",
+    },
+    body: req.body,
+    extra,
+  };
+  
+  console.log("INCOMING REQUEST:", JSON.stringify(logData, null, 2));
+  
+  try {
+    const key = `debug/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.json`;
+    await put(key, JSON.stringify(logData, null, 2), {
+      access: "public",
+      addRandomSuffix: false,
+    });
+  } catch (e) {
+    console.error("Failed to log to blob:", e);
+  }
+}
 
 // Slack Events API payload types
 interface SlackChallenge {
@@ -31,6 +59,9 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
+  // Log every request for debugging
+  await logRequest(req, { stage: "received" });
+
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
