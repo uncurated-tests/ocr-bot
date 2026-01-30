@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { waitUntil } from "@vercel/functions";
 import { put } from "@vercel/blob";
-import { verifySlackSignature } from "../../lib/slack.js";
+import { verifySlackSignature, getSlackClient, getBotUserId } from "../../lib/slack.js";
 import { processThread } from "../../lib/process-thread.js";
 import { logger } from "../../lib/logger.js";
 
@@ -66,7 +66,9 @@ interface SlackEventCallback {
   event: {
     type: string;
     user?: string;
+    bot_id?: string;
     channel: string;
+    channel_type?: string; // "im" for DMs, "channel" for public channels
     ts: string;
     thread_ts?: string;
     text?: string;
@@ -184,6 +186,59 @@ export default async function handler(
       );
 
       // Respond immediately to avoid Slack retry
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    // Handle DM messages - only respond if bot is mentioned
+    if (event.type === "message" && event.channel_type === "im") {
+      // Ignore bot messages to prevent loops
+      if (event.bot_id) {
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // Check if bot is mentioned in the message
+      const client = getSlackClient();
+      const botUserId = await getBotUserId(client);
+      const isBotMentioned = event.text?.includes(`<@${botUserId}>`);
+
+      if (!isBotMentioned) {
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // Process DM thread (same logic as app_mention)
+      const threadTs = event.thread_ts || event.ts;
+      const channel = event.channel;
+
+      waitUntil(
+        (async () => {
+          logger.start(`dm_message:${event_id}`);
+          logger.info("Received DM with bot mention", {
+            event_id,
+            channel,
+            ts: event.ts,
+            thread_ts: event.thread_ts,
+            text: event.text,
+          });
+
+          logger.info("Processing DM thread", { channel, threadTs });
+
+          try {
+            await processThread(channel, threadTs);
+            logger.info("DM thread processing completed successfully");
+          } catch (error) {
+            logger.error("Failed to process DM thread", {
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
+          } finally {
+            await logger.flush();
+          }
+        })()
+      );
+
       res.status(200).json({ ok: true });
       return;
     }
