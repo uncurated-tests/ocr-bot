@@ -25,9 +25,11 @@ export interface ProcessThreadResult {
 
 export async function processThread(
   channel: string,
-  threadTs: string
+  threadTs: string,
+  options: { force?: boolean } = {}
 ): Promise<ProcessThreadResult> {
-  logger.info("Starting thread processing", { channel, threadTs });
+  const { force = false } = options;
+  logger.info("Starting thread processing", { channel, threadTs, force });
 
   const client = getSlackClient();
   const token = process.env.SLACK_BOT_TOKEN!;
@@ -93,34 +95,43 @@ export async function processThread(
       };
     }
 
-    // Get already processed file IDs
-    const processedFileIds = await getProcessedFileIds(channel, threadTs);
-    logger.info("Retrieved processed file IDs", {
-      processedCount: processedFileIds.length,
-      processedIds: processedFileIds,
-    });
+    // Get already processed file IDs (skip if force mode)
+    let unprocessedImages = allImages;
+    let processedFileIds: string[] = [];
 
-    // Filter out already processed images
-    const unprocessedImages = filterUnprocessedFiles(allImages, processedFileIds);
-    logger.info("Filtered unprocessed images", {
-      unprocessedCount: unprocessedImages.length,
-      unprocessedIds: unprocessedImages.map((img) => img.id),
-    });
+    if (!force) {
+      processedFileIds = await getProcessedFileIds(channel, threadTs);
+      logger.info("Retrieved processed file IDs", {
+        processedCount: processedFileIds.length,
+        processedIds: processedFileIds,
+      });
 
-    if (unprocessedImages.length === 0) {
-      logger.info("All images already processed");
-      await updateMessage(
-        client,
-        channel,
-        statusMessageTs,
-        "All images in this thread have already been processed."
-      );
-      return {
-        success: true,
-        message: "All images already processed",
-        processedCount: 0,
-        skippedCount: allImages.length,
-      };
+      // Filter out already processed images
+      unprocessedImages = filterUnprocessedFiles(allImages, processedFileIds);
+      logger.info("Filtered unprocessed images", {
+        unprocessedCount: unprocessedImages.length,
+        unprocessedIds: unprocessedImages.map((img) => img.id),
+      });
+
+      if (unprocessedImages.length === 0) {
+        logger.info("All images already processed");
+        await updateMessage(
+          client,
+          channel,
+          statusMessageTs,
+          "All images in this thread have already been processed.\n_Tip: Use `@ocr force` to reprocess them._"
+        );
+        return {
+          success: true,
+          message: "All images already processed",
+          processedCount: 0,
+          skippedCount: allImages.length,
+        };
+      }
+    } else {
+      logger.info("Force mode enabled, processing all images", {
+        imageCount: allImages.length,
+      });
     }
 
     // Limit to MAX_IMAGES

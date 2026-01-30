@@ -154,6 +154,9 @@ export default async function handler(
       const threadTs = event.thread_ts || event.ts;
       const channel = event.channel;
 
+      // Check if "force" is in the message text (case-insensitive)
+      const forceMode = /\bforce\b/i.test(event.text || "");
+
       // Use waitUntil to keep the function alive while processing
       // This allows us to respond immediately to Slack while continuing to process
       waitUntil(
@@ -166,12 +169,13 @@ export default async function handler(
             ts: event.ts,
             thread_ts: event.thread_ts,
             text: event.text,
+            forceMode,
           });
 
-          logger.info("Processing thread", { channel, threadTs });
+          logger.info("Processing thread", { channel, threadTs, forceMode });
 
           try {
-            await processThread(channel, threadTs);
+            await processThread(channel, threadTs, { force: forceMode });
             logger.info("Thread processing completed successfully");
           } catch (error) {
             logger.error("Failed to process thread", {
@@ -212,6 +216,9 @@ export default async function handler(
       const threadTs = event.thread_ts || event.ts;
       const channel = event.channel;
 
+      // Check if "force" is in the message text (case-insensitive)
+      const forceMode = /\bforce\b/i.test(event.text || "");
+
       waitUntil(
         (async () => {
           logger.start(`dm_message:${event_id}`);
@@ -221,12 +228,13 @@ export default async function handler(
             ts: event.ts,
             thread_ts: event.thread_ts,
             text: event.text,
+            forceMode,
           });
 
-          logger.info("Processing DM thread", { channel, threadTs });
+          logger.info("Processing DM thread", { channel, threadTs, forceMode });
 
           try {
-            await processThread(channel, threadTs);
+            await processThread(channel, threadTs, { force: forceMode });
             logger.info("DM thread processing completed successfully");
           } catch (error) {
             logger.error("Failed to process DM thread", {
