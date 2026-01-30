@@ -11,55 +11,45 @@ export interface OCRResult {
   contentType: "website" | "document" | "photo" | "other";
 }
 
-const OCR_PROMPT = `Extract text from this image and format it for Slack messaging.
+const OCR_PROMPT = `You are an OCR assistant. Extract ALL text from this image completely and accurately.
+
+CRITICAL RULES:
+1. Extract EVERY word, sentence, and paragraph - DO NOT summarize or shorten
+2. Preserve the COMPLETE text exactly as it appears
+3. For documents, articles, or long text: include EVERYTHING from start to finish
+4. Never skip content, never truncate, never say "etc." or "..."
+5. If text continues beyond visible area, extract everything that IS visible
 
 Identify the content type:
 - "website": Screenshot of website, app, dashboard, or software UI
-- "document": Scanned document, PDF, receipt, or printed text
+- "document": Scanned document, PDF, article, receipt, or printed text
 - "photo": Photo of real-world text (signs, labels, handwriting)
 - "other": Any other image with text
 
-FORMAT THE OUTPUT USING SLACK MRKDWN SYNTAX:
-- Use *bold* for section headers, titles, and important labels
-- Use • for bullet point lists
-- Use regular text for values and descriptions
-- Only use \`\`\` code blocks \`\`\` for actual code, logs, or terminal output
-- Separate sections with blank lines
+FORMAT RULES (using Slack mrkdwn syntax):
+- Use *bold* for headers and titles only
+- Use • for bullet lists
+- Use \`\`\` code blocks \`\`\` ONLY for actual code or terminal output
+- Preserve paragraph breaks with blank lines
+- For documents/articles: output as flowing text with proper paragraphs
 
-FOR UI/WEBSITE SCREENSHOTS, structure like this example:
-*Page Title*
+FOR UI/SCREENSHOTS ONLY:
+- Skip navigation menus, breadcrumbs, repetitive UI chrome
+- Focus on main content area
+- Keep status messages, errors, and key data
 
-*Status:* Build Failed
-*Error:* Command exited with 1
-
-*Deployment Info*
-• Created by username 10h ago
-• Duration: 1m 34s
-• Environment: Preview
-
-*Domains*
-• example.vercel.app
-• example-git-branch.vercel.app
-
-*Build Logs* (4 errors)
-\`\`\`
-06:20:38 error message here
-06:20:39 another error
-\`\`\`
-
-GUIDELINES:
-- Skip navigation menus, breadcrumbs, and repetitive UI chrome
-- Focus on the main content and actionable information
-- Group related items logically
-- Keep status indicators, error messages, and key metadata
-- For logs, include only the most relevant entries (errors, warnings)
+FOR DOCUMENTS/ARTICLES/LONG TEXT:
+- Extract the COMPLETE text word-for-word
+- Maintain paragraph structure
+- Include ALL sentences - this is critical
+- Do not summarize or paraphrase
 
 Respond in this exact JSON format:
 {
   "contentType": "website" | "document" | "photo" | "other",
   "language": "detected language name",
   "isEnglish": true or false,
-  "extractedText": "the Slack-formatted text with mrkdwn syntax",
+  "extractedText": "the complete extracted text with Slack mrkdwn formatting",
   "englishTranslation": "English translation if not originally English, otherwise null"
 }
 
@@ -92,6 +82,7 @@ export async function performOCR(
   // OIDC authentication is automatic on Vercel deployments
   const { text } = await generateText({
     model: gateway("google/gemini-2.5-flash"),
+    maxOutputTokens: 16000, // Allow long responses for documents with lots of text
     messages: [
       {
         role: "user",
