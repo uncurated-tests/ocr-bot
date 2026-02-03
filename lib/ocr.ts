@@ -29,9 +29,17 @@ Identify the content type:
 FORMAT RULES (using Slack mrkdwn syntax):
 - Use *bold* for headers and titles only
 - Use • for bullet lists
-- Use \`\`\` code blocks \`\`\` ONLY for actual code or terminal output
+- Use nested bullets with two-space indentation for subitems
+- Use \`\`\` code blocks \`\`\` ONLY for actual code, terminal output, or tables
 - Preserve paragraph breaks with blank lines
 - For documents/articles: output as flowing text with proper paragraphs
+
+STRUCTURE FOR DATA AND TABLES:
+- When information is tabular (metrics, key/value grids, columns), format it as a readable table
+- For Slack, use a monospaced table inside a code block to preserve alignment
+- Keep column headers short and rows aligned with spaces
+- If alignment is not possible, use a two-level bullet list (section header + key/value bullets)
+- Preserve every label and value from the original; do not omit entries
 
 FOR UI/SCREENSHOTS ONLY:
 - Skip navigation menus, breadcrumbs, repetitive UI chrome
