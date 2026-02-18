@@ -15,6 +15,7 @@ import { performOCR, formatOCRResultsForSlack, type OCRResult } from "./ocr.js";
 import { logger } from "./logger.js";
 
 const MAX_IMAGES = 50;
+const SLACK_MAX_TEXT_LENGTH = 39_900; // Slack limit is 40,000; leave room for truncation notice
 
 export interface ProcessThreadResult {
   success: boolean;
@@ -229,6 +230,18 @@ export async function processThread(
 
       if (limitReached) {
         response += `\n\n_Note: Limited to ${MAX_IMAGES} images per request. ${unprocessedImages.length - MAX_IMAGES} more images remain unprocessed._`;
+      }
+
+      if (response.length > SLACK_MAX_TEXT_LENGTH) {
+        logger.warn("OCR response exceeds Slack message limit, truncating", {
+          originalLength: response.length,
+          maxLength: SLACK_MAX_TEXT_LENGTH,
+        });
+        const truncationNotice =
+          "\n\n_⚠ Output was truncated because it exceeded Slack's message length limit._";
+        response =
+          response.slice(0, SLACK_MAX_TEXT_LENGTH - truncationNotice.length) +
+          truncationNotice;
       }
 
       logger.info("Updating message with OCR results", {
