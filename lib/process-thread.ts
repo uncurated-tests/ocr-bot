@@ -15,38 +15,13 @@ import { performOCR, formatOCRResultsForSlack, type OCRResult } from "./ocr.js";
 import { logger } from "./logger.js";
 
 const MAX_IMAGES = 50;
-const SLACK_MAX_TEXT_LENGTH = 3_900; // Slack best-practice limit is 4,000 chars; chat.update may reject longer messages
+const SLACK_MAX_TEXT_LENGTH = 38_000; // Slack truncates at 40,000; use 38K to leave margin
 
 export interface ProcessThreadResult {
   success: boolean;
   message: string;
   processedCount: number;
   skippedCount: number;
-}
-
-/** Split text into chunks that fit within Slack's message length limit. */
-function splitTextIntoChunks(text: string, maxLength: number): string[] {
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLength) {
-      chunks.push(remaining);
-      break;
-    }
-    // Try to split at a paragraph boundary (double newline)
-    let splitIndex = remaining.lastIndexOf("\n\n", maxLength);
-    if (splitIndex <= 0 || splitIndex < maxLength * 0.5) {
-      // Fall back to splitting at a single newline
-      splitIndex = remaining.lastIndexOf("\n", maxLength);
-    }
-    if (splitIndex <= 0 || splitIndex < maxLength * 0.5) {
-      // Fall back to hard cut
-      splitIndex = maxLength;
-    }
-    chunks.push(remaining.slice(0, splitIndex));
-    remaining = remaining.slice(splitIndex).replace(/^\n+/, "");
-  }
-  return chunks;
 }
 
 export async function processThread(
@@ -257,35 +232,23 @@ export async function processThread(
         response += `\n\n_Note: Limited to ${MAX_IMAGES} images per request. ${unprocessedImages.length - MAX_IMAGES} more images remain unprocessed._`;
       }
 
+      if (response.length > SLACK_MAX_TEXT_LENGTH) {
+        logger.warn("OCR response exceeds Slack message limit, truncating", {
+          originalLength: response.length,
+          maxLength: SLACK_MAX_TEXT_LENGTH,
+        });
+        const truncationNotice =
+          "\n\n_Output was truncated because it exceeded Slack's message length limit._";
+        response =
+          response.slice(0, SLACK_MAX_TEXT_LENGTH - truncationNotice.length) +
+          truncationNotice;
+      }
+
       logger.info("Updating message with OCR results", {
         resultsCount: results.length,
         responseLength: response.length,
       });
-
-      // If the response fits within the limit, update the status message directly
-      if (response.length <= SLACK_MAX_TEXT_LENGTH) {
-        await updateMessage(client, channel, statusMessageTs, response);
-      } else {
-        // Response is too long — split into chunks posted as separate messages
-        logger.warn("OCR response exceeds Slack message limit, splitting into multiple messages", {
-          originalLength: response.length,
-          maxLength: SLACK_MAX_TEXT_LENGTH,
-        });
-
-        // Update the status message with a header
-        await updateMessage(
-          client,
-          channel,
-          statusMessageTs,
-          `Processed ${results.length} image${results.length > 1 ? "s" : ""}. Output was split across multiple messages due to length.`
-        );
-
-        // Split the response into chunks and post each as a new message
-        const chunks = splitTextIntoChunks(response, SLACK_MAX_TEXT_LENGTH);
-        for (const chunk of chunks) {
-          await postMessageToThread(client, channel, threadTs, chunk);
-        }
-      }
+      await updateMessage(client, channel, statusMessageTs, response);
     } else {
       logger.warn("No images were successfully processed");
       await updateMessage(
