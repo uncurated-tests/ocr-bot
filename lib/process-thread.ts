@@ -232,7 +232,10 @@ export async function processThread(
         response += `\n\n_Note: Limited to ${MAX_IMAGES} images per request. ${unprocessedImages.length - MAX_IMAGES} more images remain unprocessed._`;
       }
 
+      console.log(`[OCR] Response length before truncation: ${response.length}`);
+
       if (response.length > SLACK_MAX_TEXT_LENGTH) {
+        console.log(`[OCR] Truncating from ${response.length} to ${SLACK_MAX_TEXT_LENGTH}`);
         logger.warn("OCR response exceeds Slack message limit, truncating", {
           originalLength: response.length,
           maxLength: SLACK_MAX_TEXT_LENGTH,
@@ -244,11 +247,13 @@ export async function processThread(
           truncationNotice;
       }
 
+      console.log(`[OCR] Final response length: ${response.length}, updating message...`);
       logger.info("Updating message with OCR results", {
         resultsCount: results.length,
         responseLength: response.length,
       });
       await updateMessage(client, channel, statusMessageTs, response);
+      console.log(`[OCR] Message updated successfully`);
     } else {
       logger.warn("No images were successfully processed");
       await updateMessage(
@@ -272,6 +277,8 @@ export async function processThread(
     };
   } catch (error) {
     // Update the status message with error
+    console.error(`[OCR] Thread processing failed:`, error instanceof Error ? error.message : String(error));
+    console.error(`[OCR] Stack:`, error instanceof Error ? error.stack : "no stack");
     logger.error("Thread processing failed", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
