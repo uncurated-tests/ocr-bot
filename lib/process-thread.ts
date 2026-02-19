@@ -13,9 +13,23 @@ import {
 } from "./blob.js";
 import { performOCR, formatOCRResultsForSlack, type OCRResult } from "./ocr.js";
 import { logger } from "./logger.js";
+import { put } from "@vercel/blob";
 
 const MAX_IMAGES = 50;
 const SLACK_MAX_TEXT_LENGTH = 38_000; // Slack truncates at 40,000; use 38K to leave margin
+
+async function logDiagnostics(data: Record<string, unknown>): Promise<void> {
+  try {
+    const key = `diagnostics/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`;
+    const blob = await put(key, JSON.stringify({ timestamp: new Date().toISOString(), ...data }, null, 2), {
+      access: "public",
+      addRandomSuffix: false,
+    });
+    console.log(`[diag] ${blob.url}`);
+  } catch {
+    // best-effort, don't break processing
+  }
+}
 
 export interface ProcessThreadResult {
   success: boolean;
@@ -233,6 +247,7 @@ export async function processThread(
       }
 
       // Truncate to stay within Slack's message limit
+      const originalLength = response.length;
       const truncationNotice =
         "\n\n_Output was truncated because it exceeded Slack's message length limit._";
       if (response.length > SLACK_MAX_TEXT_LENGTH) {
@@ -243,23 +258,36 @@ export async function processThread(
 
       // Attempt to post; if Slack still rejects, halve and retry
       let posted = false;
+      let retries = 0;
       while (!posted) {
         try {
           await updateMessage(client, channel, statusMessageTs, response);
           posted = true;
         } catch (err) {
-          const isToolong =
+          const isTooLong =
             err instanceof Error && err.message.includes("msg_too_long");
-          if (isToolong && response.length > 500) {
-            // Halve the text and retry
+          if (isTooLong && response.length > 500) {
+            retries++;
             response =
               response.slice(0, Math.floor(response.length / 2)) +
               truncationNotice;
           } else {
-            throw err; // not a length issue, propagate
+            throw err;
           }
         }
       }
+
+      // Log diagnostics to blob storage
+      await logDiagnostics({
+        stage: "update_success",
+        originalLength,
+        finalLength: response.length,
+        retries,
+        limit: SLACK_MAX_TEXT_LENGTH,
+        resultsCount: results.length,
+        channel,
+        threadTs,
+      });
     } else {
       logger.warn("No images were successfully processed");
       await updateMessage(
@@ -282,7 +310,15 @@ export async function processThread(
       skippedCount: processedFileIds.length,
     };
   } catch (error) {
-    // Update the status message with error
+    // Log diagnostics to blob storage
+    await logDiagnostics({
+      stage: "processing_error",
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      channel,
+      threadTs,
+    });
+
     logger.error("Thread processing failed", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
